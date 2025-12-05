@@ -1,0 +1,76 @@
+name: build-windows-installer
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore bing-daily-win/BingDaily/BingDaily.csproj
+
+      - name: Publish self-contained exe
+        run: |
+          dotnet publish bing-daily-win/BingDaily/BingDaily.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o bing-daily-win/publish
+
+      - name: Convert PNG to ICO for installer
+        run: |
+          # Create ICO from logo.png for installer
+          Add-Type -AssemblyName System.Drawing
+          $png = [System.Drawing.Image]::FromFile("$pwd\bing-daily-win\BingDaily\Resources\logo.png")
+          $bitmap = New-Object System.Drawing.Bitmap $png, 256, 256
+          $icon = [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
+          $stream = [System.IO.File]::Create("$pwd\bing-daily-win\BingDaily\Resources\logo.ico")
+          $icon.Save($stream)
+          $stream.Close()
+          $bitmap.Dispose()
+          $png.Dispose()
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Installer
+        run: |
+          cd bing-daily-win
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BingDaily-Installer
+          path: bing-daily-win/installer/BingDaily-Setup.exe
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            bing-daily-win/installer/BingDaily-Setup.exe
+            bing-daily-win/publish/BingDaily.exe
+        env:
+          GITHUB_TOKEN: ${{ env.RELEASE_TOKEN }}
