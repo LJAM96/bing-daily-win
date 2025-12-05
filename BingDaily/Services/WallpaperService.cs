@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using BingDaily.Models;
 
 namespace BingDaily.Services;
@@ -42,14 +43,25 @@ public class WallpaperService
         // Save image
         await File.WriteAllBytesAsync(filePath, imageData);
         
-        // Set as wallpaper
-        SetWallpaper(filePath);
+        // Set as wallpaper with style
+        SetWallpaper(filePath, settings.WallpaperStyle);
         
         return filePath;
     }
 
-    private static void SetWallpaper(string imagePath)
+    private static void SetWallpaper(string imagePath, WallpaperStyle style)
     {
+        // Set wallpaper style via registry
+        using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", true);
+        if (key != null)
+        {
+            // WallpaperStyle: 0=Center, 2=Stretch, 6=Fit, 10=Fill, 22=Span
+            key.SetValue("WallpaperStyle", ((int)style).ToString());
+            // TileWallpaper: 0=No tile, 1=Tile
+            key.SetValue("TileWallpaper", style == WallpaperStyle.Tile ? "1" : "0");
+        }
+
+        // Apply the wallpaper
         SystemParametersInfo(
             SPI_SETDESKWALLPAPER,
             0,

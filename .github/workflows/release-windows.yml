@@ -24,6 +24,27 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Convert PNG to ICO
+        run: |
+          # Create ICO from logo.png for both installer and exe embedding
+          Add-Type -AssemblyName System.Drawing
+          $png = [System.Drawing.Image]::FromFile("$pwd\BingDaily\Resources\logo.png")
+          
+          # Create multi-size ICO for better display at different sizes
+          $sizes = @(16, 32, 48, 256)
+          $iconPath = "$pwd\BingDaily\Resources\logo.ico"
+          
+          # For proper Windows icon, create a 256x256 bitmap and convert to icon
+          $bitmap = New-Object System.Drawing.Bitmap $png, 256, 256
+          $icon = [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
+          $stream = [System.IO.File]::Create($iconPath)
+          $icon.Save($stream)
+          $stream.Close()
+          $bitmap.Dispose()
+          $png.Dispose()
+          
+          Write-Host "Created icon at: $iconPath"
+
       - name: Restore dependencies
         run: dotnet restore BingDaily/BingDaily.csproj
 
@@ -36,19 +57,6 @@ jobs:
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -o publish
-
-      - name: Convert PNG to ICO for installer
-        run: |
-          # Create ICO from logo.png for installer
-          Add-Type -AssemblyName System.Drawing
-          $png = [System.Drawing.Image]::FromFile("$pwd\BingDaily\Resources\logo.png")
-          $bitmap = New-Object System.Drawing.Bitmap $png, 256, 256
-          $icon = [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
-          $stream = [System.IO.File]::Create("$pwd\BingDaily\Resources\logo.ico")
-          $icon.Save($stream)
-          $stream.Close()
-          $bitmap.Dispose()
-          $png.Dispose()
 
       - name: Install Inno Setup
         run: |

@@ -16,6 +16,7 @@ public class Settings
     public bool LaunchAtLogin { get; set; } = false;
     public ImagePreview? LastPreview { get; set; }
     public bool HasCompletedOnboarding { get; set; } = false;
+    public WallpaperStyle WallpaperStyle { get; set; } = WallpaperStyle.Fill;
     
     public string ResolvedMarket => string.IsNullOrEmpty(Market) 
         ? (string.IsNullOrEmpty(CustomMarket) ? "en-US" : CustomMarket) 
@@ -62,4 +63,14 @@ public class ImagePreview
     public string Description { get; set; } = "";
     public string FileName { get; set; } = "";
     public string FilePath { get; set; } = "";
+}
+
+public enum WallpaperStyle
+{
+    Fill = 10,      // Crops to fill screen (no black bars)
+    Fit = 6,        // Letterbox/pillarbox (may show black bars)
+    Stretch = 2,    // Stretches to fill (may distort)
+    Center = 0,     // Centered at original size
+    Tile = 1,       // Tiled pattern
+    Span = 22       // Span across multiple monitors
 }

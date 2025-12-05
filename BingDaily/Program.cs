@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.IO;
-using BingDaily.Services;
 using BingDaily.Models;
+using BingDaily.Services;
 
 namespace BingDaily;
 
@@ -180,6 +180,32 @@ public class TrayApplication : IDisposable
             retentionMenu.DropDownItems.Add(item);
         }
         menu.Items.Add(retentionMenu);
+        
+        // Wallpaper Style submenu
+        var styleMenu = new ToolStripMenuItem("🖼️ Wallpaper Style");
+        var styles = new[] { 
+            (WallpaperStyle.Fill, "Fill (recommended)"),
+            (WallpaperStyle.Fit, "Fit (may show bars)"),
+            (WallpaperStyle.Stretch, "Stretch"),
+            (WallpaperStyle.Center, "Center"),
+            (WallpaperStyle.Tile, "Tile"),
+            (WallpaperStyle.Span, "Span (multi-monitor)")
+        };
+        foreach (var (style, label) in styles)
+        {
+            var item = new ToolStripMenuItem(label)
+            {
+                Checked = _settings.WallpaperStyle == style,
+                Tag = style
+            };
+            item.Click += (s, e) =>
+            {
+                _settings.WallpaperStyle = style;
+                SaveAndRefresh(true);
+            };
+            styleMenu.DropDownItems.Add(item);
+        }
+        menu.Items.Add(styleMenu);
         
         menu.Items.Add(new ToolStripSeparator());
         
