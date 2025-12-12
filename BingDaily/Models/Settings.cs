@@ -14,6 +14,7 @@ public class Settings
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".bing-wallpapers");
     public bool LaunchAtLogin { get; set; } = false;
+    public string LastAppliedImageId { get; set; } = "";
     public ImagePreview? LastPreview { get; set; }
     public bool HasCompletedOnboarding { get; set; } = false;
     public WallpaperStyle WallpaperStyle { get; set; } = WallpaperStyle.Fill;

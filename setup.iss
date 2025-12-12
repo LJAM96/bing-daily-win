@@ -1,7 +1,7 @@
 ; Inno Setup Script for Bing Daily Wallpaper
 
 #define MyAppName "Bing Daily Wallpaper"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "LJAM96"
 #define MyAppURL "https://github.com/LJAM96/bing-daily-mac"
 #define MyAppExeName "BingDaily.exe"

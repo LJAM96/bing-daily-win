@@ -1,5 +1,7 @@
 using System.Drawing;
 using System.IO;
+using System.Threading;
+using System.Windows.Forms;
 using BingDaily.Models;
 using BingDaily.Services;
 
@@ -10,11 +12,22 @@ static class Program
     [STAThread]
     static void Main()
     {
+        using var singleInstanceMutex = new Mutex(
+            initiallyOwned: true,
+            name: @"Local\BingDaily_8D8D9E0B-5F29-4F67-9A7D-0E2B0B4B3F7A",
+            createdNew: out var createdNew);
+
+        if (!createdNew)
+        {
+            return;
+        }
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         
         var app = new TrayApplication();
+        Application.ApplicationExit += (_, _) => app.Dispose();
         Application.Run();
     }
 }
@@ -33,6 +46,7 @@ public class TrayApplication : IDisposable
     public TrayApplication()
     {
         _settings = _settingsService.Load();
+        SyncStartupSetting();
         
         _trayIcon = new NotifyIcon
         {
@@ -46,6 +60,15 @@ public class TrayApplication : IDisposable
         
         // Initial update on launch
         _ = UpdateWallpaperAsync("Launch");
+    }
+
+    private void SyncStartupSetting()
+    {
+        var isEnabled = _startupService.IsEnabled;
+        if (_settings.LaunchAtLogin == isEnabled) return;
+
+        _settings.LaunchAtLogin = isEnabled;
+        _settingsService.Save(_settings);
     }
 
     private Icon LoadAppIcon()
@@ -66,8 +89,112 @@ public class TrayApplication : IDisposable
         return SystemIcons.Application;
     }
 
+    private ToolStripItem? CreateLastPreviewMenuItem()
+    {
+        var preview = _settings.LastPreview;
+        if (preview == null) return null;
+        if (string.IsNullOrWhiteSpace(preview.FilePath) || !File.Exists(preview.FilePath)) return null;
+
+        var panel = new Panel
+        {
+            BackColor = Color.FromArgb(35, 35, 35),
+            Padding = new Padding(8),
+            Width = 320,
+            Height = 140,
+        };
+
+        var pictureBox = new PictureBox
+        {
+            Width = 128,
+            Height = 72,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Color.FromArgb(25, 25, 25),
+            Location = new Point(8, 8),
+        };
+
+        Image? thumbnail = null;
+        try
+        {
+            thumbnail = CreateThumbnail(preview.FilePath, pictureBox.Width, pictureBox.Height);
+            pictureBox.Image = thumbnail;
+        }
+        catch
+        {
+            thumbnail?.Dispose();
+            thumbnail = null;
+        }
+
+        var titleLabel = new Label
+        {
+            Text = preview.Title,
+            ForeColor = Color.FromArgb(240, 240, 240),
+            BackColor = Color.Transparent,
+            Font = new Font(SystemFonts.MenuFont ?? SystemFonts.DefaultFont, FontStyle.Bold),
+            AutoSize = false,
+            Location = new Point(pictureBox.Right + 10, 8),
+            Size = new Size(panel.Width - (pictureBox.Right + 18), 38),
+        };
+
+        var descLabel = new Label
+        {
+            Text = preview.Description,
+            ForeColor = Color.FromArgb(200, 200, 200),
+            BackColor = Color.Transparent,
+            AutoSize = false,
+            Location = new Point(pictureBox.Right + 10, titleLabel.Bottom + 4),
+            Size = new Size(panel.Width - (pictureBox.Right + 18), 52),
+        };
+
+        panel.Controls.Add(pictureBox);
+        panel.Controls.Add(titleLabel);
+        panel.Controls.Add(descLabel);
+
+        var host = new ToolStripControlHost(panel)
+        {
+            AutoSize = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+        };
+
+        host.Disposed += (_, _) =>
+        {
+            try
+            {
+                pictureBox.Image?.Dispose();
+                pictureBox.Image = null;
+            }
+            catch
+            {
+                // ignored
+            }
+        };
+
+        return host;
+    }
+
+    private static Image CreateThumbnail(string filePath, int width, int height)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var src = Image.FromStream(stream);
+        var bmp = new Bitmap(width, height);
+        using var g = Graphics.FromImage(bmp);
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+        g.Clear(Color.FromArgb(25, 25, 25));
+
+        var scale = Math.Min((float)width / src.Width, (float)height / src.Height);
+        var scaledWidth = (int)Math.Round(src.Width * scale);
+        var scaledHeight = (int)Math.Round(src.Height * scale);
+        var x = (width - scaledWidth) / 2;
+        var y = (height - scaledHeight) / 2;
+        g.DrawImage(src, new Rectangle(x, y, scaledWidth, scaledHeight));
+        return bmp;
+    }
+
     private void BuildContextMenu()
     {
+        var oldMenu = _trayIcon.ContextMenuStrip;
         var menu = new ContextMenuStrip();
         menu.Renderer = new ModernMenuRenderer();
         
@@ -75,6 +202,12 @@ public class TrayApplication : IDisposable
         var statusItem = new ToolStripMenuItem("Bing Daily Wallpaper") { Enabled = false };
         statusItem.Font = new Font(statusItem.Font, FontStyle.Bold);
         menu.Items.Add(statusItem);
+
+        var previewItem = CreateLastPreviewMenuItem();
+        if (previewItem != null)
+        {
+            menu.Items.Add(previewItem);
+        }
         menu.Items.Add(new ToolStripSeparator());
         
         // Update Now
@@ -210,14 +343,16 @@ public class TrayApplication : IDisposable
         menu.Items.Add(new ToolStripSeparator());
         
         // Launch at login toggle
+        var startupEnabled = _startupService.IsEnabled;
         var launchItem = new ToolStripMenuItem("🚀 Launch at Login")
         {
-            Checked = _settings.LaunchAtLogin
+            Checked = startupEnabled
         };
         launchItem.Click += (s, e) =>
         {
-            _settings.LaunchAtLogin = !_settings.LaunchAtLogin;
-            _startupService.SetEnabled(_settings.LaunchAtLogin);
+            var newValue = !_startupService.IsEnabled;
+            _settings.LaunchAtLogin = newValue;
+            _startupService.SetEnabled(newValue);
             SaveAndRefresh(false);
         };
         menu.Items.Add(launchItem);
@@ -246,6 +381,29 @@ public class TrayApplication : IDisposable
         menu.Items.Add(quitItem);
         
         _trayIcon.ContextMenuStrip = menu;
+
+        if (oldMenu != null && !ReferenceEquals(oldMenu, menu))
+        {
+            try
+            {
+                if (oldMenu.Visible && oldMenu.IsHandleCreated)
+                {
+                    oldMenu.BeginInvoke(new Action(() =>
+                    {
+                        try { oldMenu.Close(); } catch { }
+                        try { oldMenu.Dispose(); } catch { }
+                    }));
+                }
+                else
+                {
+                    oldMenu.Dispose();
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+        }
     }
 
     private void SaveAndRefresh(bool triggerUpdate)
@@ -287,24 +445,41 @@ public class TrayApplication : IDisposable
             
             if (image != null)
             {
-                var savedPath = await _wallpaperService.DownloadAndApplyAsync(image, _settings);
-                _wallpaperService.PruneOldImages(_settings);
-                
-                _settings.LastPreview = new ImagePreview
+                var imageId = $"{image.StartDate}_{_settings.ResolvedMarket}_{_settings.Resolution.Id}";
+                var isNew = !string.Equals(_settings.LastAppliedImageId, imageId, StringComparison.Ordinal);
+                var cachedPath = _settings.LastPreview?.FilePath;
+                var hasCachedImage = !string.IsNullOrWhiteSpace(cachedPath) && File.Exists(cachedPath);
+
+                string? savedPath = null;
+                if (isNew || !hasCachedImage)
                 {
-                    Title = image.Title ?? image.StartDate,
-                    Description = image.Copyright ?? "Bing daily image",
-                    FileName = Path.GetFileName(savedPath),
-                    FilePath = savedPath
-                };
-                _settingsService.Save(_settings);
+                    savedPath = await _wallpaperService.DownloadAndApplyAsync(image, _settings);
+                    _wallpaperService.PruneOldImages(_settings);
+                }
+                
+                if (savedPath != null)
+                {
+                    _settings.LastAppliedImageId = imageId;
+                    _settings.LastPreview = new ImagePreview
+                    {
+                        Title = image.Title ?? image.StartDate,
+                        Description = image.Copyright ?? "Bing daily image",
+                        FileName = Path.GetFileName(savedPath),
+                        FilePath = savedPath
+                    };
+                    _settingsService.Save(_settings);
+                    BuildContextMenu();
+                }
                 
                 var title = image.Title ?? "New wallpaper";
                 _trayIcon.Text = $"Bing Daily - {title}".Length > 63 
                     ? $"Bing Daily - {title}"[..63] 
                     : $"Bing Daily - {title}";
                 
-                _trayIcon.ShowBalloonTip(3000, "Wallpaper Updated", title, ToolTipIcon.Info);
+                if (isNew)
+                {
+                    _trayIcon.ShowBalloonTip(3000, "Wallpaper Updated", title, ToolTipIcon.Info);
+                }
             }
             else
             {

@@ -7,7 +7,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>BingDaily</AssemblyName>
     <RootNamespace>BingDaily</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.2</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
