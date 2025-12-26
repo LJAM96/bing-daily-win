@@ -476,10 +476,7 @@ public class TrayApplication : IDisposable
                     ? $"Bing Daily - {title}"[..63] 
                     : $"Bing Daily - {title}";
                 
-                if (isNew)
-                {
-                    _trayIcon.ShowBalloonTip(3000, "Wallpaper Updated", title, ToolTipIcon.Info);
-                }
+
             }
             else
             {
@@ -489,7 +486,6 @@ public class TrayApplication : IDisposable
         catch (Exception ex)
         {
             _trayIcon.Text = "Bing Daily - Error";
-            _trayIcon.ShowBalloonTip(3000, "Update Failed", ex.Message, ToolTipIcon.Error);
         }
         finally
         {
