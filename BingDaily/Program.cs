@@ -476,10 +476,7 @@ public class TrayApplication : IDisposable
                     ? $"Bing Daily - {title}"[..63] 
                     : $"Bing Daily - {title}";
                 
-                if (isNew)
-                {
-                    // Notification removed to prevent spam
-                }
+                // Notification removed to prevent spam
             }
             else
             {
