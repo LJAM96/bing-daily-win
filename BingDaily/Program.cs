@@ -478,7 +478,7 @@ public class TrayApplication : IDisposable
                 
                 if (isNew)
                 {
-                    _trayIcon.ShowBalloonTip(3000, "Wallpaper Updated", title, ToolTipIcon.Info);
+                    // Notification removed to prevent spam
                 }
             }
             else
@@ -489,7 +489,7 @@ public class TrayApplication : IDisposable
         catch (Exception ex)
         {
             _trayIcon.Text = "Bing Daily - Error";
-            _trayIcon.ShowBalloonTip(3000, "Update Failed", ex.Message, ToolTipIcon.Error);
+            // Notification removed to prevent spam
         }
         finally
         {
